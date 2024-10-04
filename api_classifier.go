@@ -12,15 +12,32 @@ import (
 
 // Info we need for classification. Will extend as we add more classifiers!
 type DomainInfo struct {
-	Domain              string            // Domain name
+	Domain              string            // Resolved domain name
+	OriginalDomain      string            // Original input domain name
 	IPv4                []string          // List of IPv4 addresses
 	IPv6                []string          // List of IPv6 addresses
 	CertIssuer          string            // Certificate Issuer (Amazon vs. non-Amazon)
 	HttpResponseHeaders map[string]string // Map of HTTP response headers
 }
 
+// ResolveCNAME checks if the given domain is a CNAME and resolves it
+func resolveCNAME(domain string) (string, error) {
+	// Perform a CNAME lookup
+	cname, err := net.LookupCNAME(domain)
+	if err != nil {
+		return domain, nil // If no CNAME is found, return the original domain
+	}
+	return strings.TrimSuffix(cname, "."), nil // Remove trailing dot from CNAME
+}
+
 // Extract relevant information from the HTTP response for classification
 func extractDomainInfo(domain string) (*DomainInfo, error) {
+	// Resolve CNAME if present
+	resolvedDomain, err := resolveCNAME(domain)
+	if err != nil {
+		return nil, err
+	}
+
 	// Make a request to get the headers and TLS information
 	req, err := http.NewRequest("GET", "https://"+domain, nil)
 	if err != nil {
@@ -77,7 +94,8 @@ func extractDomainInfo(domain string) (*DomainInfo, error) {
 
 	// Return the extracted information
 	domainInfo := &DomainInfo{
-		Domain:              domain,
+		Domain:              resolvedDomain,
+		OriginalDomain:      domain,
 		IPv4:                ipv4,
 		IPv6:                ipv6,
 		CertIssuer:          certIssuer,
@@ -136,6 +154,8 @@ func classifyALB(info *DomainInfo) string {
 		return ""
 	}
 
+	// TODO - not happy. can we do better?
+
 	// ALBs often resolve IPv6 addresses, so check for that
 	if len(info.IPv6) > 0 {
 		return "ALB (IPv6-enabled)"
@@ -169,6 +189,6 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Domain: %s\nClassification: %s\n", domainInfo.Domain, classification)
+	fmt.Printf("Original Domain: %s\nResolved Domain: %s\nClassification: %s\n", domainInfo.OriginalDomain, domainInfo.Domain, classification)
 	fmt.Printf("IPv4: %v\nIPv6: %v\nCertIssuer: %s\n", domainInfo.IPv4, domainInfo.IPv6, domainInfo.CertIssuer)
 }
