@@ -194,7 +194,6 @@ var classifiers = []ClassifierFunc{
 	classifyEdgeAPI,
 	classifyALB,
 	classifyNLB,
-	classifyClassicLB,
 }
 
 // Regular expression for matching API Gateway hostnames
@@ -237,11 +236,6 @@ func classifyALB(info *DomainInfo) string {
 		return ""
 	}
 
-	// Can't have an Amazon-issued certificate
-	if info.CertIssuer == "Amazon" {
-		return ""
-	}
-
 	// ALBs often resolve IPv6 addresses, so check for that
 	if len(info.IPv6) > 0 {
 		return "ALB (IPv6-enabled)"
@@ -255,21 +249,12 @@ func classifyNLB(info *DomainInfo) string {
 		return ""
 	}
 
-	// Can't have an Amazon-issued certificate
-	if info.CertIssuer == "Amazon" {
-		return ""
-	}
-
 	// ALBs often resolve IPv6 addresses, so check for that
 	if len(info.IPv6) > 0 {
 		return "NLB (IPv6-enabled)"
 	}
 
 	return "NLB"
-}
-
-func classifyClassicLB(info *DomainInfo) string {
-	return ""
 }
 
 // Main function
