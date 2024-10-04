@@ -46,7 +46,7 @@ func TestClassifyRegionalAPI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			info := &DomainInfo{
 				Domain:              tt.domain,
-				IPs:                 tt.ips,
+				IPv4:                tt.ips,
 				HttpResponseHeaders: tt.headers,
 			}
 			got := classifyRegionalAPI(info)
@@ -99,7 +99,7 @@ func TestClassifyEdgeAPI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			info := &DomainInfo{
 				Domain:              tt.domain,
-				IPs:                 tt.ips,
+				IPv4:                tt.ips,
 				HttpResponseHeaders: tt.headers,
 			}
 			got := classifyEdgeAPI(info)
