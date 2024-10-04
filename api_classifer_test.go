@@ -155,3 +155,56 @@ func TestClassifyALB(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyNLB(t *testing.T) {
+	tests := []struct {
+		name     string
+		domain   string
+		ipv4     []string
+		ipv6     []string
+		expected string
+	}{
+		{
+			name:     "Match NLB with IPv4",
+			domain:   "mynlb-1234567890.elb.us-east-1.amazonaws.com",
+			ipv4:     []string{"1.2.3.4"},
+			ipv6:     []string{},
+			expected: "NLB",
+		},
+		{
+			name:     "Match NLB with IPv6",
+			domain:   "mynlb-1234567890.elb.us-east-1.amazonaws.com",
+			ipv4:     []string{},
+			ipv6:     []string{"2606:4700:4700::1111"},
+			expected: "NLB (IPv6-enabled)",
+		},
+		{
+			name:     "Not Match NLB - Invalid domain",
+			domain:   "not-an-nlb.com",
+			ipv4:     []string{"1.2.3.4"},
+			ipv6:     []string{},
+			expected: "",
+		},
+		{
+			name:     "Not Match NLB - Empty IPs",
+			domain:   "mynlb-1234567890.elb.us-east-1.amazonaws.com",
+			ipv4:     []string{},
+			ipv6:     []string{},
+			expected: "NLB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := &DomainInfo{
+				Domain: tt.domain,
+				IPv4:   tt.ipv4,
+				IPv6:   tt.ipv6,
+			}
+			got := classifyNLB(info)
+			if got != tt.expected {
+				t.Errorf("classifyNLB() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
