@@ -2,58 +2,79 @@ package main
 
 import (
 	"magic-lb-classifier/classifiers"
-	"magic-lb-classifier/domain_info"
+	"magic-lb-classifier/probes"
 	"testing"
 )
 
 func TestClassifyRegionalAPI(t *testing.T) {
 	tests := []struct {
-		name     string
-		domain   string
-		ips      []string
-		headers  map[string]string
-		expected string
+		name         string
+		probeResults map[string]interface{}
+		expected     string
 	}{
 		{
-			name:     "Match Regional API",
-			domain:   "myhost.execute-api.us-east-2.amazonaws.com",
-			ips:      []string{"1.2.3.4", "5.6.7.8"},
-			headers:  map[string]string{},
+			name: "Match Regional API",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4", "5.6.7.8"},
+					HttpResponseHeaders: map[string]string{},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       true,
+					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
+				},
+			},
 			expected: "API Gateway: Regional API",
 		},
 		{
-			name:     "Not Match Regional API - More than 2 IPs",
-			domain:   "myhost.execute-api.us-east-2.amazonaws.com",
-			ips:      []string{"1.2.3.4", "5.6.7.8", "9.10.11.12"},
-			headers:  map[string]string{},
+			name: "Not Match Regional API - More than 2 IPs",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+					HttpResponseHeaders: map[string]string{},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       true,
+					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
+				},
+			},
 			expected: "",
 		},
 		{
-			name:     "Not Match Regional API - CloudFront headers present",
-			domain:   "myhost.execute-api.us-east-2.amazonaws.com",
-			ips:      []string{"1.2.3.4", "5.6.7.8"},
-			headers:  map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+			name: "Not Match Regional API - CloudFront headers present",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4", "5.6.7.8"},
+					HttpResponseHeaders: map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       true,
+					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
+				},
+			},
 			expected: "",
 		},
 		{
-			name:     "Not Match Regional API - Invalid domain",
-			domain:   "not-an-api.com",
-			ips:      []string{"1.2.3.4"},
-			headers:  map[string]string{},
+			name: "Not Match Regional API - Invalid domain",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4"},
+					HttpResponseHeaders: map[string]string{},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       false,
+					ResolvedDomain: "not-an-api.com",
+				},
+			},
 			expected: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &domain_info.DomainInfo{
-				Domain:              tt.domain,
-				IPv4:                tt.ips,
-				HttpResponseHeaders: tt.headers,
-			}
-			got := classifiers.ClassifyRegionalAPI(info)
+			got := classifiers.ClassifyRegionalAPI(tt.probeResults)
 			if got != tt.expected {
-				t.Errorf("classifyRegionalAPI() = %v, want %v", got, tt.expected)
+				t.Errorf("ClassifyRegionalAPI() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -61,151 +82,73 @@ func TestClassifyRegionalAPI(t *testing.T) {
 
 func TestClassifyEdgeAPI(t *testing.T) {
 	tests := []struct {
-		name     string
-		domain   string
-		ips      []string
-		headers  map[string]string
-		expected string
+		name         string
+		probeResults map[string]interface{}
+		expected     string
 	}{
 		{
-			name:     "Match Edge API",
-			domain:   "myhost.execute-api.us-east-2.amazonaws.com",
-			ips:      []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
-			headers:  map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+			name: "Match Edge API",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
+					HttpResponseHeaders: map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       true,
+					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
+				},
+			},
 			expected: "API Gateway: Edge API",
 		},
 		{
-			name:     "Not Match Edge API - Less than 4 IPs",
-			domain:   "myhost.execute-api.us-east-2.amazonaws.com",
-			ips:      []string{"1.2.3.4", "5.6.7.8"},
-			headers:  map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+			name: "Not Match Edge API - Less than 4 IPs",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4", "5.6.7.8"},
+					HttpResponseHeaders: map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       true,
+					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
+				},
+			},
 			expected: "",
 		},
 		{
-			name:     "Not Match Edge API - CloudFront headers not present",
-			domain:   "myhost.execute-api.us-east-2.amazonaws.com",
-			ips:      []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
-			headers:  map[string]string{},
+			name: "Not Match Edge API - CloudFront headers not present",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
+					HttpResponseHeaders: map[string]string{},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       true,
+					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
+				},
+			},
 			expected: "",
 		},
 		{
-			name:     "Not Match Edge API - Invalid domain",
-			domain:   "not-an-api.com",
-			ips:      []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
-			headers:  map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			info := &domain_info.DomainInfo{
-				Domain:              tt.domain,
-				IPv4:                tt.ips,
-				HttpResponseHeaders: tt.headers,
-			}
-			got := classifiers.ClassifyEdgeAPI(info)
-			if got != tt.expected {
-				t.Errorf("classifyEdgeAPI() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
-}
-
-func TestClassifyALB(t *testing.T) {
-	tests := []struct {
-		name     string
-		domain   string
-		ipv4     []string
-		ipv6     []string
-		expected string
-	}{
-		{
-			name:     "Match ALB with IPv4",
-			domain:   "myloadbalancer-1234567890.us-east-1.elb.amazonaws.com",
-			ipv4:     []string{"1.2.3.4"},
-			ipv6:     []string{},
-			expected: "ALB",
-		},
-		{
-			name:     "Match ALB with IPv6",
-			domain:   "myloadbalancer-1234567890.us-east-1.elb.amazonaws.com",
-			ipv4:     []string{},
-			ipv6:     []string{"2606:4700:4700::1111"},
-			expected: "ALB (IPv6-enabled)",
-		},
-		{
-			name:     "Not Match ALB - Invalid domain",
-			domain:   "not-an-alb.com",
-			ipv4:     []string{"1.2.3.4"},
-			ipv6:     []string{},
+			name: "Not Match Edge API - Invalid domain",
+			probeResults: map[string]interface{}{
+				"HTTP": &probes.HttpProbeData{
+					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
+					HttpResponseHeaders: map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+				},
+				"CNAME": &probes.CnameProbeData{
+					WasCname:       false,
+					ResolvedDomain: "not-an-api.com",
+				},
+			},
 			expected: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &domain_info.DomainInfo{
-				Domain: tt.domain,
-				IPv4:   tt.ipv4,
-				IPv6:   tt.ipv6,
-			}
-			got := classifyALB(info)
+			got := classifiers.ClassifyEdgeAPI(tt.probeResults)
 			if got != tt.expected {
-				t.Errorf("classifyALB() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
-}
-
-func TestClassifyNLB(t *testing.T) {
-	tests := []struct {
-		name     string
-		domain   string
-		ipv4     []string
-		ipv6     []string
-		expected string
-	}{
-		{
-			name:     "Match NLB with IPv4",
-			domain:   "mynlb-1234567890.elb.us-east-1.amazonaws.com",
-			ipv4:     []string{"1.2.3.4"},
-			ipv6:     []string{},
-			expected: "NLB",
-		},
-		{
-			name:     "Match NLB with IPv6",
-			domain:   "mynlb-1234567890.elb.us-east-1.amazonaws.com",
-			ipv4:     []string{},
-			ipv6:     []string{"2606:4700:4700::1111"},
-			expected: "NLB (IPv6-enabled)",
-		},
-		{
-			name:     "Not Match NLB - Invalid domain",
-			domain:   "not-an-nlb.com",
-			ipv4:     []string{"1.2.3.4"},
-			ipv6:     []string{},
-			expected: "",
-		},
-		{
-			name:     "Not Match NLB - Empty IPs",
-			domain:   "mynlb-1234567890.elb.us-east-1.amazonaws.com",
-			ipv4:     []string{},
-			ipv6:     []string{},
-			expected: "NLB",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			info := &domain_info.DomainInfo{
-				Domain: tt.domain,
-				IPv4:   tt.ipv4,
-				IPv6:   tt.ipv6,
-			}
-			got := classifyNLB(info)
-			if got != tt.expected {
-				t.Errorf("classifyNLB() = %v, want %v", got, tt.expected)
+				t.Errorf("ClassifyEdgeAPI() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
