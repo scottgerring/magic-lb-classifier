@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"fmt"
 	"log"
@@ -16,12 +17,13 @@ var debug = false
 
 // Info we need for classification. Will extend as we add more classifiers!
 type DomainInfo struct {
-	Domain              string            // Resolved domain name
-	OriginalDomain      string            // Original input domain name
-	IPv4                []string          // List of IPv4 addresses
-	IPv6                []string          // List of IPv6 addresses
-	CertIssuer          string            // Certificate Issuer (Amazon vs. non-Amazon)
-	HttpResponseHeaders map[string]string // Map of HTTP response headers
+	Domain                string            // Resolved domain name
+	OriginalDomain        string            // Original input domain name
+	IPv4                  []string          // List of IPv4 addresses
+	IPv6                  []string          // List of IPv6 addresses
+	CertIssuer            string            // Certificate Issuer (Amazon vs. non-Amazon)
+	HttpResponseHeaders   map[string]string // Map of HTTP response headers
+	Http10ResponseHeaders map[string]string // Map of HTTP response headers when we force a bad HTTP/1.0 request
 }
 
 // ResolveCNAME checks if the given domain is a CNAME and resolves it
@@ -50,13 +52,11 @@ func printTLSInfo(connState *tls.ConnectionState) {
 }
 
 // Debug function to print detailed HTTP headers
-func printHeaders(headers http.Header) {
+func printHeaders(title string, headers map[string]string) {
 	if debug {
-		fmt.Println("=== HTTP Response Headers ===")
-		for key, values := range headers {
-			for _, value := range values {
-				fmt.Printf("%s: %s\n", key, value)
-			}
+		fmt.Printf("=== %s ===\n", title)
+		for key, value := range headers {
+			fmt.Printf("%s: %s\n", key, value)
 		}
 		fmt.Println("==============================")
 	}
@@ -96,6 +96,42 @@ func tlsCipherSuiteToString(cipherSuite uint16) string {
 	}
 }
 
+// sendHttp10RequestWithoutHost sends an HTTP/1.0 request without the Host header and parses the response headers using Go's HTTP library.
+func sendHttp10RequestWithoutHost(domain string) (map[string]string, error) {
+	// Open a raw TLS connection
+	address := domain + ":443"
+	conn, err := tls.Dial("tcp", address, &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish connection: %v", err)
+	}
+	defer conn.Close()
+
+	// Manually construct an HTTP/1.0 request without the Host header
+	request := "GET / HTTP/1.0\r\n\r\n"
+
+	// Send the HTTP/1.0 request without the Host header
+	_, err = conn.Write([]byte(request))
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+
+	// Let go's built-in HTTP response parser deal with it
+	reader := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(reader, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// And write out headers back
+	headers := make(map[string]string)
+	for key, values := range resp.Header {
+		headers[key] = strings.Join(values, ", ") // Join multiple header values if present
+	}
+
+	return headers, nil
+}
+
 // Extract relevant information from the HTTP response for classification
 func extractDomainInfo(domain string) (*DomainInfo, error) {
 	// Resolve CNAME if present
@@ -129,10 +165,6 @@ func extractDomainInfo(domain string) (*DomainInfo, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	// Print some debugging bits if debugging is on
-	printTLSInfo(resp.TLS)
-	printHeaders(resp.Header)
 
 	// Extract IP addresses
 	ipAddresses, err := net.LookupIP(resp.Request.URL.Hostname())
@@ -172,14 +204,23 @@ func extractDomainInfo(domain string) (*DomainInfo, error) {
 		headers[key] = values[0] // Only take the first value for simplicity
 	}
 
+	// Print some debugging bits if debugging is on
+	printTLSInfo(resp.TLS)
+	printHeaders("Regular HTTP Headers", headers)
+
+	// Send a HTTP/1.0 request without a Host
+	http10headers, _ := sendHttp10RequestWithoutHost(domain)
+	printHeaders("HTTP/1.0 Headers", http10headers)
+
 	// Return the extracted information
 	domainInfo := &DomainInfo{
-		Domain:              resolvedDomain,
-		OriginalDomain:      domain,
-		IPv4:                ipv4,
-		IPv6:                ipv6,
-		CertIssuer:          certIssuer,
-		HttpResponseHeaders: headers,
+		Domain:                resolvedDomain,
+		OriginalDomain:        domain,
+		IPv4:                  ipv4,
+		IPv6:                  ipv6,
+		CertIssuer:            certIssuer,
+		HttpResponseHeaders:   headers,
+		Http10ResponseHeaders: http10headers,
 	}
 
 	return domainInfo, nil
