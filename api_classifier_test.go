@@ -1,6 +1,8 @@
 package main
 
 import (
+	"magic-lb-classifier/classifiers"
+	"magic-lb-classifier/domain_info"
 	"testing"
 )
 
@@ -44,12 +46,12 @@ func TestClassifyRegionalAPI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &DomainInfo{
+			info := &domain_info.DomainInfo{
 				Domain:              tt.domain,
 				IPv4:                tt.ips,
 				HttpResponseHeaders: tt.headers,
 			}
-			got := classifyRegionalAPI(info)
+			got := classifiers.ClassifyRegionalAPI(info)
 			if got != tt.expected {
 				t.Errorf("classifyRegionalAPI() = %v, want %v", got, tt.expected)
 			}
@@ -97,12 +99,12 @@ func TestClassifyEdgeAPI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &DomainInfo{
+			info := &domain_info.DomainInfo{
 				Domain:              tt.domain,
 				IPv4:                tt.ips,
 				HttpResponseHeaders: tt.headers,
 			}
-			got := classifyEdgeAPI(info)
+			got := classifiers.ClassifyEdgeAPI(info)
 			if got != tt.expected {
 				t.Errorf("classifyEdgeAPI() = %v, want %v", got, tt.expected)
 			}
@@ -143,7 +145,7 @@ func TestClassifyALB(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &DomainInfo{
+			info := &domain_info.DomainInfo{
 				Domain: tt.domain,
 				IPv4:   tt.ipv4,
 				IPv6:   tt.ipv6,
@@ -196,7 +198,7 @@ func TestClassifyNLB(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &DomainInfo{
+			info := &domain_info.DomainInfo{
 				Domain: tt.domain,
 				IPv4:   tt.ipv4,
 				IPv6:   tt.ipv6,

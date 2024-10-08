@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"magic-lb-classifier/classifiers"
+	"magic-lb-classifier/domain_info"
 	"net"
 	"net/http"
 	"os"
@@ -14,17 +16,6 @@ import (
 
 // Global debug flag
 var debug = false
-
-// Info we need for classification. Will extend as we add more classifiers!
-type DomainInfo struct {
-	Domain                string            // Resolved domain name
-	OriginalDomain        string            // Original input domain name
-	IPv4                  []string          // List of IPv4 addresses
-	IPv6                  []string          // List of IPv6 addresses
-	CertIssuer            string            // Certificate Issuer (Amazon vs. non-Amazon)
-	HttpResponseHeaders   map[string]string // Map of HTTP response headers
-	Http10ResponseHeaders map[string]string // Map of HTTP response headers when we force a bad HTTP/1.0 request
-}
 
 // ResolveCNAME checks if the given domain is a CNAME and resolves it
 func resolveCNAME(domain string) (string, error) {
@@ -133,7 +124,7 @@ func sendHttp10RequestWithoutHost(domain string) (map[string]string, error) {
 }
 
 // Extract relevant information from the HTTP response for classification
-func extractDomainInfo(domain string) (*DomainInfo, error) {
+func extractDomainInfo(domain string) (*domain_info.DomainInfo, error) {
 	// Resolve CNAME if present
 	resolvedDomain, err := resolveCNAME(domain)
 	if err != nil {
@@ -213,7 +204,7 @@ func extractDomainInfo(domain string) (*DomainInfo, error) {
 	printHeaders("HTTP/1.0 Headers", http10headers)
 
 	// Return the extracted information
-	domainInfo := &DomainInfo{
+	domainInfo := &domain_info.DomainInfo{
 		Domain:                resolvedDomain,
 		OriginalDomain:        domain,
 		IPv4:                  ipv4,
@@ -227,51 +218,22 @@ func extractDomainInfo(domain string) (*DomainInfo, error) {
 }
 
 // Classifier function types
-type ClassifierFunc func(*DomainInfo) string
+type ClassifierFunc func(*domain_info.DomainInfo) string
 
 // List of classifiers
-var classifiers = []ClassifierFunc{
-	classifyRegionalAPI,
-	classifyEdgeAPI,
+var classifierFuncs = []ClassifierFunc{
+	classifiers.ClassifyRegionalAPI,
+	classifiers.ClassifyEdgeAPI,
 	classifyALB,
 	classifyNLB,
 }
 
 // Regular expression for matching API Gateway hostnames
-var apiGatewayRegex = regexp.MustCompile(`^[^.]+\.execute-api\.[^.]+\.amazonaws.com$`)
 var albRegex = regexp.MustCompile(`^[^.]+\.[^.]+\.elb\.amazonaws.com$`) // blob.us-east-1.amazonaws.com
 var nlbRegex = regexp.MustCompile(`^[^.]+\.elb\.[^.]+\.amazonaws.com$`) // blob.elb.us-east-1.amazonaws.com
 
-// Classifier for Regional API
-func classifyRegionalAPI(info *DomainInfo) string {
-	// Check if the domain matches the API Gateway pattern
-	if !apiGatewayRegex.MatchString(info.Domain) {
-		return ""
-	}
-
-	// Check if there are at most 2 IPs and specific CloudFront headers are NOT present
-	if len(info.IPv4) <= 2 && (info.HttpResponseHeaders["X-Amz-Cf-Pop"] == "" && info.HttpResponseHeaders["Via"] == "") {
-		return "API Gateway: Regional API"
-	}
-	return ""
-}
-
-// Classifier for API Gateway Edge API
-func classifyEdgeAPI(info *DomainInfo) string {
-	// Check if the domain matches the API Gateway pattern
-	if !apiGatewayRegex.MatchString(info.Domain) {
-		return ""
-	}
-
-	// Check if there are at least 4 IPs and the required CloudFront headers are present
-	if len(info.IPv4) >= 4 && info.HttpResponseHeaders["X-Amz-Cf-Pop"] != "" && info.HttpResponseHeaders["Via"] != "" {
-		return "API Gateway: Edge API"
-	}
-	return ""
-}
-
 // Classifier for ALB
-func classifyALB(info *DomainInfo) string {
+func classifyALB(info *domain_info.DomainInfo) string {
 	// Check if the domain matches the ALB pattern
 	if !albRegex.MatchString(info.Domain) {
 		return ""
@@ -285,7 +247,7 @@ func classifyALB(info *DomainInfo) string {
 }
 
 // Classifier for NLB
-func classifyNLB(info *DomainInfo) string {
+func classifyNLB(info *domain_info.DomainInfo) string {
 	if !nlbRegex.MatchString(info.Domain) {
 		return ""
 	}
@@ -321,7 +283,7 @@ func main() {
 
 	// Classify the domain using the classifiers
 	classification := "Unknown"
-	for _, classifier := range classifiers {
+	for _, classifier := range classifierFuncs {
 		result := classifier(domainInfo)
 		if result != "" {
 			classification = result
