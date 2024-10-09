@@ -15,16 +15,17 @@ type Http10ProbeData struct {
 
 // Http10Probe Runs a HTTP/1.0 probe without a `Host` header.
 func Http10Probe(domain string, debug bool) (interface{}, error) {
-	headers, err := sendHttpRequest(domain)
+	headers, err := sendHttpRequest(domain, debug)
 	if err != nil {
 		return nil, err
 	}
+
 	return &Http10ProbeData{
 		Http10ResponseHeaders: headers,
 	}, nil
 }
 
-func sendHttpRequest(domain string) (map[string]string, error) {
+func sendHttpRequest(domain string, debug bool) (map[string]string, error) {
 	address := domain + ":443"
 	conn, err := tls.Dial("tcp", address, &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -48,6 +49,10 @@ func sendHttpRequest(domain string) (map[string]string, error) {
 	headers := make(map[string]string)
 	for key, values := range resp.Header {
 		headers[key] = strings.Join(values, ", ")
+	}
+
+	if debug {
+		printHeaders("HTTP/1.0 Probe", headers)
 	}
 
 	return headers, nil

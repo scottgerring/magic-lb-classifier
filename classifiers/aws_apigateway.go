@@ -60,7 +60,7 @@ func ClassifyEdgeAPI(probeResults map[string]interface{}) string {
 		return ""
 	}
 
-	// Check if there are at least 4 IPs and the required CloudFront headers are present
+	// 3. Check if there are at least 4 IPs and the required CloudFront headers are present
 	if len(httpData.IPv4) >= 4 && httpData.HttpResponseHeaders["X-Amz-Cf-Pop"] != "" && httpData.HttpResponseHeaders["Via"] != "" {
 		return "API Gateway: Edge API"
 	}
