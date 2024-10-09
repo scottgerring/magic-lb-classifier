@@ -12,7 +12,7 @@ var probeFuncMap map[string]ProbeFunc
 func init() {
 	probeFuncMap = map[string]ProbeFunc{
 		"HTTP":     HttpProbe,
-		"Http_1.0": Http10Probe,
+		"HTTP_1.0": Http10Probe,
 		"CNAME":    CnameProbe,
 	}
 }

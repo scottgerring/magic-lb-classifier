@@ -16,12 +16,17 @@ func TestClassifyRegionalAPI(t *testing.T) {
 			name: "Match Regional API",
 			probeResults: map[string]interface{}{
 				"HTTP": &probes.HttpProbeData{
-					IPv4:                []string{"1.2.3.4", "5.6.7.8"},
-					HttpResponseHeaders: map[string]string{},
+					IPv4: []string{"1.2.3.4", "5.6.7.8"},
+					HttpResponseHeaders: map[string]string{
+						"Apigw-Requestid": "12345",
+					},
 				},
 				"CNAME": &probes.CnameProbeData{
 					WasCname:       true,
 					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
+				},
+				"HTTP_1.0": &probes.Http10ProbeData{
+					Http10ResponseHeaders: map[string]string{},
 				},
 			},
 			expected: "API Gateway: Regional API",
@@ -30,40 +35,55 @@ func TestClassifyRegionalAPI(t *testing.T) {
 			name: "Not Match Regional API - More than 2 IPs",
 			probeResults: map[string]interface{}{
 				"HTTP": &probes.HttpProbeData{
-					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12"},
-					HttpResponseHeaders: map[string]string{},
+					IPv4: []string{"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+					HttpResponseHeaders: map[string]string{
+						"Apigw-Requestid": "12345",
+					},
 				},
 				"CNAME": &probes.CnameProbeData{
 					WasCname:       true,
 					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
 				},
+				"HTTP_1.0": &probes.Http10ProbeData{
+					Http10ResponseHeaders: map[string]string{},
+				},
 			},
 			expected: "",
 		},
 		{
-			name: "Not Match Regional API - CloudFront headers present",
+			name: "Not Match Regional API - CloudFront headers present on HTTP/1.1",
 			probeResults: map[string]interface{}{
 				"HTTP": &probes.HttpProbeData{
 					IPv4:                []string{"1.2.3.4", "5.6.7.8"},
-					HttpResponseHeaders: map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+					HttpResponseHeaders: map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1", "Apigw-Requestid": "12345"},
 				},
 				"CNAME": &probes.CnameProbeData{
 					WasCname:       true,
 					ResolvedDomain: "myhost.execute-api.us-east-2.amazonaws.com",
 				},
+				"HTTP_1.0": &probes.Http10ProbeData{
+					Http10ResponseHeaders: map[string]string{},
+				},
 			},
 			expected: "",
 		},
 		{
-			name: "Not Match Regional API - Invalid domain",
+			name: "Not Match Regional API - Cloudfront headers on HTTP/1.0",
 			probeResults: map[string]interface{}{
 				"HTTP": &probes.HttpProbeData{
-					IPv4:                []string{"1.2.3.4"},
-					HttpResponseHeaders: map[string]string{},
+					IPv4: []string{"1.2.3.4"},
+					HttpResponseHeaders: map[string]string{
+						"Apigw-Requestid": "12345",
+					},
 				},
 				"CNAME": &probes.CnameProbeData{
 					WasCname:       false,
 					ResolvedDomain: "not-an-api.com",
+				},
+				"HTTP_1.0": &probes.Http10ProbeData{
+					Http10ResponseHeaders: map[string]string{
+						"Server": "CloudFront",
+					},
 				},
 			},
 			expected: "",
@@ -90,8 +110,14 @@ func TestClassifyEdgeAPI(t *testing.T) {
 			name: "Match Edge API",
 			probeResults: map[string]interface{}{
 				"HTTP": &probes.HttpProbeData{
-					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
-					HttpResponseHeaders: map[string]string{"X-Amz-Cf-Pop": "some-value", "Via": "1.1"},
+					IPv4: []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
+					HttpResponseHeaders: map[string]string{
+						"X-Amz-Apigw-Id": "12345",
+						"X-Amz-Cf-Pop":   "some-value",
+						"Via":            "1.1"},
+				},
+				"HTTP_1.0": &probes.Http10ProbeData{
+					Http10ResponseHeaders: map[string]string{"Server": "CloudFront"},
 				},
 				"CNAME": &probes.CnameProbeData{
 					WasCname:       true,
@@ -118,8 +144,13 @@ func TestClassifyEdgeAPI(t *testing.T) {
 			name: "Not Match Edge API - CloudFront headers not present",
 			probeResults: map[string]interface{}{
 				"HTTP": &probes.HttpProbeData{
-					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
-					HttpResponseHeaders: map[string]string{},
+					IPv4: []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
+					HttpResponseHeaders: map[string]string{
+						"X-Amz-Cf-Pop": "some-value",
+						"Via":          "1.1"},
+				},
+				"HTTP_1.0": &probes.Http10ProbeData{
+					Http10ResponseHeaders: map[string]string{"Server": "CloudFront"},
 				},
 				"CNAME": &probes.CnameProbeData{
 					WasCname:       true,
@@ -129,7 +160,7 @@ func TestClassifyEdgeAPI(t *testing.T) {
 			expected: "",
 		},
 		{
-			name: "Not Match Edge API - Invalid domain",
+			name: "Not Match Edge API - Cloudfront header missing in HTTP/1.0",
 			probeResults: map[string]interface{}{
 				"HTTP": &probes.HttpProbeData{
 					IPv4:                []string{"1.2.3.4", "5.6.7.8", "9.10.11.12", "11.12.13.14"},
@@ -138,6 +169,9 @@ func TestClassifyEdgeAPI(t *testing.T) {
 				"CNAME": &probes.CnameProbeData{
 					WasCname:       false,
 					ResolvedDomain: "not-an-api.com",
+				},
+				"HTTP_1.0": &probes.Http10ProbeData{
+					Http10ResponseHeaders: map[string]string{"Server": "nginx"},
 				},
 			},
 			expected: "",

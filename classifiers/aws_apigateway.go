@@ -9,19 +9,24 @@ var apiGatewayRegex = regexp.MustCompile(`^[^.]+\.execute-api\.[^.]+\.amazonaws.
 
 // Classifier for Regional API
 func ClassifyRegionalAPI(probeResults map[string]interface{}) string {
-	// Retrieve the HTTP probe data from the map
+	// Retrieve the probe data that we need
 	httpData, ok := probeResults["HTTP"].(*probes.HttpProbeData)
 	if !ok {
 		// If the HTTP probe data is not available, return an empty string
 		return ""
 	}
-
-	// Check if the domain matches the API Gateway pattern
-	cnameData, ok := probeResults["CNAME"].(*probes.CnameProbeData)
+	http10Data, ok := probeResults["HTTP_1.0"].(*probes.Http10ProbeData)
 	if !ok {
 		return ""
 	}
-	if !apiGatewayRegex.MatchString(cnameData.ResolvedDomain) {
+
+	// 1. Should have an apigw-requestid on HTTP/1.1
+	if httpData.HttpResponseHeaders["Apigw-Requestid"] == "" {
+		return ""
+	}
+
+	// 2. Should not have a Cloudfront header on HTTP/1.0
+	if http10Data.Http10ResponseHeaders["Server"] == "CloudFront" {
 		return ""
 	}
 
@@ -33,21 +38,25 @@ func ClassifyRegionalAPI(probeResults map[string]interface{}) string {
 	return ""
 }
 
-// Classifier for API Gateway Edge API
+// ClassifyEdgeAPI implements a classifier for an API Gateway - edge API
 func ClassifyEdgeAPI(probeResults map[string]interface{}) string {
-	// Retrieve the HTTP probe data from the map
+	// Retrieve the probe data that we need
 	httpData, ok := probeResults["HTTP"].(*probes.HttpProbeData)
 	if !ok {
-		// If the HTTP probe data is not available, return an empty string
+		return ""
+	}
+	http10Data, ok := probeResults["HTTP_1.0"].(*probes.Http10ProbeData)
+	if !ok {
 		return ""
 	}
 
-	// Check if the domain matches the API Gateway pattern
-	cnameData, ok := probeResults["CNAME"].(*probes.CnameProbeData)
-	if !ok {
+	// 1. Needs a request ID on HTTP1.1
+	if httpData.HttpResponseHeaders["X-Amz-Apigw-Id"] == "" {
 		return ""
 	}
-	if !apiGatewayRegex.MatchString(cnameData.ResolvedDomain) {
+
+	// 2. Should have a Cloudfront header on HTTP1.0
+	if http10Data.Http10ResponseHeaders["Server"] != "CloudFront" {
 		return ""
 	}
 
