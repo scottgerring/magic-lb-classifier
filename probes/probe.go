@@ -16,6 +16,7 @@ func init() {
 		"HTTP":     HttpProbe,
 		"HTTP_1.0": Http10Probe,
 		"CNAME":    CnameProbe,
+		"RDNS":     RdnsProbe,
 	}
 }
 
